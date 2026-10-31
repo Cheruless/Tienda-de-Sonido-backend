@@ -1,3 +1,18 @@
 spring:
   application:
     name: auth-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/auth_db}
+    username: ${DB_USER:auth_user}
+    password: ${DB_PASSWORD:auth_pass}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+server:
+  port: 8081
+
+jwt:
+  secret: ${JWT_SECRET:cambia-este-secreto-por-uno-de-minimo-32-caracteres-seguro}
+  expiration-ms: 3600000

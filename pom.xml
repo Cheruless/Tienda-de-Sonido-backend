@@ -16,4 +16,11 @@
 
     <packaging>pom</packaging>
 
+    <modules>
+        <module>api-gateway</module>
+        <module>auth-service</module>
+        <module>cart-service</module>
+        <module>catalog-service</module>
+    </modules>
+
 </project>
