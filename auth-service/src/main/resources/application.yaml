@@ -16,3 +16,6 @@ server:
 jwt:
   secret: ${JWT_SECRET:cambia-este-secreto-por-uno-de-minimo-32-caracteres-seguro}
   expiration-ms: 3600000
+
+cors:
+  allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
