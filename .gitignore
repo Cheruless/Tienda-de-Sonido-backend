@@ -37,3 +37,9 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### MiMo agent ###
+.mimocode/
+
+### LongCat agent ###
+.longcat/
