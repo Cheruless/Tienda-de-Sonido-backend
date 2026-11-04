@@ -1,0 +1,35 @@
+services:
+  # MongoDB propio del carrito (mismo volumen que el cart-mongo de desarrollo).
+  cart-db:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - cart_mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  cart-service:
+    build:
+      context: ./cart-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      # Nombre DNS del servicio cart-db dentro de la red de Compose.
+      MONGO_URL: mongodb://cart-db:27017/cartdb
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (copia .env.example)}
+      CATALOG_CLIENT: ${CATALOG_CLIENT:-fake}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    depends_on:
+      cart-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  cart_mongodata:
+    name: cart_mongodata

@@ -1,0 +1,15 @@
+# Build y control de versiones: no hacen falta dentro de la imagen.
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# El Dockerfile usa el Maven de la imagen base, no el wrapper del repo.
+.mvn/
+mvnw
+mvnw.cmd
+HELP.md
