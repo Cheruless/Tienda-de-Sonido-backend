@@ -38,27 +38,30 @@ public class UserController {
 
     // ---------- DTOs ----------
 
-    public record UserResponse(Long id, String username, String email,
-                               boolean activo, List<String> roles) {}
+    public record UserResponse(Long id, String nombre, String email, boolean activo,
+                               String rol, List<String> roles, String registradoEn) {}
 
     public record ActivoRequest(@NotNull(message = "El campo activo es obligatorio") Boolean activo) {}
 
     public record RolesRequest(@NotEmpty(message = "Debes indicar al menos un rol") Set<String> roles) {}
 
     private UserResponse toResponse(Usuario u) {
+        boolean esAdmin = u.getRoles().stream().anyMatch(r -> r.getNombre().equals("ADMIN"));
         return new UserResponse(
             u.getId(),
-            u.getUsername(),
+            u.getNombre(),
             u.getEmail(),
             u.isActivo(),
-            u.getRoles().stream().map(Rol::getNombre).sorted().toList());
+            esAdmin ? "admin" : "cliente",
+            u.getRoles().stream().map(Rol::getNombre).sorted().toList(),
+            u.getFechaCreacion().toString());
     }
 
     // ---------- Cualquier usuario autenticado ----------
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(Authentication authentication) {
-        return usuarioRepository.findByUsername(authentication.getName())
+        return usuarioRepository.findByEmail(authentication.getName())
             .map(u -> ResponseEntity.ok(toResponse(u)))
             .orElse(ResponseEntity.notFound().build());
     }
@@ -80,7 +83,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("error", "Usuario no encontrado"));
         }
-        if (!request.activo() && usuario.getUsername().equals(authentication.getName())) {
+        if (!request.activo() && usuario.getEmail().equals(authentication.getName())) {
             return ResponseEntity.badRequest()
                 .body(Map.of("error", "No puedes desactivar tu propia cuenta"));
         }
@@ -111,7 +114,7 @@ public class UserController {
             nuevosRoles.add(rol);
         }
 
-        boolean esUnoMismo = usuario.getUsername().equals(authentication.getName());
+        boolean esUnoMismo = usuario.getEmail().equals(authentication.getName());
         boolean seQuedaSinAdmin = nuevosRoles.stream().noneMatch(r -> r.getNombre().equals("ADMIN"));
         if (esUnoMismo && seQuedaSinAdmin) {
             return ResponseEntity.badRequest()

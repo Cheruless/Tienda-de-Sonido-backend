@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,26 +27,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class AuthFlowTests {
 
+    private static final String ADMIN_EMAIL = "admin@sonidovivo.cl";
+    private static final String ADMIN_PASS = "Admin123Password";
+    private static final String DEMO_EMAIL = "demo@sonidovivo.cl";
+    private static final String DEMO_PASS = "Demo123Password";
+
     @Autowired
     private MockMvc mockMvc;
 
     // ---------- Helpers ----------
 
-    private String loginBody(String username, String password) {
-        return "{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}";
+    private String loginBody(String email, String password) {
+        return "{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}";
     }
 
-    private String login(String username, String password) throws Exception {
+    private String login(String email, String password) throws Exception {
         String body = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody(username, password)))
+                        .content(loginBody(email, password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.token");
     }
 
-    private String registerBody(String username, String email, String password) {
-        return "{\"username\":\"" + username + "\",\"email\":\"" + email
+    private String registerBody(String nombre, String email, String password) {
+        return "{\"nombre\":\"" + nombre + "\",\"email\":\"" + email
                 + "\",\"password\":\"" + password + "\"}";
     }
 
@@ -54,41 +60,68 @@ class AuthFlowTests {
         return new String(decoded, StandardCharsets.UTF_8);
     }
 
-    private String unique(String prefix) {
-        return prefix + UUID.randomUUID().toString().substring(0, 8);
+    private String uniqueEmail() {
+        return "user" + UUID.randomUUID().toString().substring(0, 8) + "@correo.cl";
+    }
+
+    private Integer idDe(String token) throws Exception {
+        String body = mockMvc.perform(get("/users/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.id");
     }
 
     // ---------- Login ----------
 
     @Test
-    void loginAdminDevuelveTokenConSoloElRol() throws Exception {
+    void loginAdminDevuelveTokenYDatosDelUsuario() throws Exception {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody("admin", "admin123")))
+                        .content(loginBody(ADMIN_EMAIL, ADMIN_PASS)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isString())
                 .andExpect(jsonPath("$.type").value("Bearer"))
-                .andExpect(jsonPath("$.expiresInSeconds").value(3600));
+                .andExpect(jsonPath("$.expiresInSeconds").value(3600))
+                .andExpect(jsonPath("$.usuario.email").value(ADMIN_EMAIL))
+                .andExpect(jsonPath("$.usuario.nombre").value("Administrador"))
+                .andExpect(jsonPath("$.usuario.rol").value("admin"));
 
-        String payload = payloadOf(login("admin", "admin123"));
+        String payload = payloadOf(login(ADMIN_EMAIL, ADMIN_PASS));
+        assertTrue(payload.contains(ADMIN_EMAIL));
         assertTrue(payload.contains("ROLE_ADMIN"));
         assertFalse(payload.contains("FACTOR_PASSWORD"));
     }
 
     @Test
     void loginClienteTraeRolCliente() throws Exception {
-        String payload = payloadOf(login("cliente", "cliente123"));
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody(DEMO_EMAIL, DEMO_PASS)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuario.rol").value("cliente"));
+
+        String payload = payloadOf(login(DEMO_EMAIL, DEMO_PASS));
         assertTrue(payload.contains("ROLE_CLIENTE"));
         assertFalse(payload.contains("ROLE_ADMIN"));
+    }
+
+    @Test
+    void loginNoDistingueMayusculasEnElCorreo() throws Exception {
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody("ADMIN@SonidoVivo.CL", ADMIN_PASS)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuario.email").value(ADMIN_EMAIL));
     }
 
     @Test
     void loginConPasswordIncorrectaDa401() throws Exception {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody("admin", "mala")))
+                        .content(loginBody(ADMIN_EMAIL, "mala")))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("Credenciales inválidas"));
+                .andExpect(jsonPath("$.error").exists());
     }
 
     @Test
@@ -98,7 +131,7 @@ class AuthFlowTests {
                         .content(loginBody("", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Datos inválidos"))
-                .andExpect(jsonPath("$.detalles.username").exists())
+                .andExpect(jsonPath("$.detalles.email").exists())
                 .andExpect(jsonPath("$.detalles.password").exists());
     }
 
@@ -106,7 +139,7 @@ class AuthFlowTests {
     void loginConJsonRotoDa400() throws Exception {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\": "))
+                        .content("{\"email\": "))
                 .andExpect(status().isBadRequest());
     }
 
@@ -114,31 +147,35 @@ class AuthFlowTests {
 
     @Test
     void registroCreaUsuarioYPuedeIniciarSesion() throws Exception {
-        String username = unique("user");
+        String email = uniqueEmail();
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerBody(username, username + "@correo.cl", "secreto123")))
+                        .content(registerBody("Juan Perez", email, "secreto123")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").exists());
 
-        String payload = payloadOf(login(username, "secreto123"));
-        assertTrue(payload.contains("ROLE_CLIENTE"));
-    }
-
-    @Test
-    void registroConUsernameDuplicadoDa409() throws Exception {
-        mockMvc.perform(post("/auth/register")
+        mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerBody("admin", unique("x") + "@correo.cl", "secreto123")))
-                .andExpect(status().isConflict());
+                        .content(loginBody(email, "secreto123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuario.nombre").value("Juan Perez"))
+                .andExpect(jsonPath("$.usuario.rol").value("cliente"));
     }
 
     @Test
     void registroConEmailDuplicadoDa409() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerBody(unique("user"), "cliente@tiendasonido.cl", "secreto123")))
+                        .content(registerBody("Otro Admin", ADMIN_EMAIL, "secreto123")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void registroConEmailDuplicadoEnOtraCapitalizacionDa409() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("Otro Demo", "DEMO@SonidoVivo.cl", "secreto123")))
                 .andExpect(status().isConflict());
     }
 
@@ -148,7 +185,7 @@ class AuthFlowTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody("ab", "no-es-email", "123")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detalles.username").exists())
+                .andExpect(jsonPath("$.detalles.nombre").exists())
                 .andExpect(jsonPath("$.detalles.email").exists())
                 .andExpect(jsonPath("$.detalles.password").exists());
     }
@@ -163,7 +200,7 @@ class AuthFlowTests {
 
     @Test
     void usersMeConTokenAlteradoDa401() throws Exception {
-        String token = login("cliente", "cliente123");
+        String token = login(DEMO_EMAIL, DEMO_PASS);
 
         // Se cambia el primer carácter de la firma, lo que sí altera sus bytes
         String[] partes = token.split("\\.");
@@ -178,12 +215,14 @@ class AuthFlowTests {
 
     @Test
     void usersMeConTokenDevuelveLosDatosDelUsuario() throws Exception {
-        String token = login("cliente", "cliente123");
+        String token = login(DEMO_EMAIL, DEMO_PASS);
         mockMvc.perform(get("/users/me")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("cliente"))
-                .andExpect(jsonPath("$.roles[0]").value("CLIENTE"));
+                .andExpect(jsonPath("$.email").value(DEMO_EMAIL))
+                .andExpect(jsonPath("$.nombre").value("Usuario Demo"))
+                .andExpect(jsonPath("$.rol").value("cliente"))
+                .andExpect(jsonPath("$.registradoEn").isString());
     }
 
     @Test
@@ -194,7 +233,7 @@ class AuthFlowTests {
 
     @Test
     void listarUsuariosComoClienteDa403() throws Exception {
-        String token = login("cliente", "cliente123");
+        String token = login(DEMO_EMAIL, DEMO_PASS);
         mockMvc.perform(get("/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
@@ -202,32 +241,29 @@ class AuthFlowTests {
 
     @Test
     void listarUsuariosComoAdminDa200() throws Exception {
-        String token = login("admin", "admin123");
+        String token = login(ADMIN_EMAIL, ADMIN_PASS);
         mockMvc.perform(get("/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].nombre").exists())
+                .andExpect(jsonPath("$[0].rol").exists());
     }
 
     // ---------- Administración ----------
 
     @Test
     void adminDesactivaUsuarioYEsteYaNoPuedeIniciarSesion() throws Exception {
-        // Se usa un usuario recién creado para no alterar a admin ni a cliente
-        String username = unique("baja");
+        // Se usa un usuario recién creado para no alterar las cuentas semilla
+        String email = uniqueEmail();
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerBody(username, username + "@correo.cl", "secreto123")))
+                        .content(registerBody("Usuario Baja", email, "secreto123")))
                 .andExpect(status().isCreated());
 
-        String userToken = login(username, "secreto123");
-        String meBody = mockMvc.perform(get("/users/me")
-                        .header("Authorization", "Bearer " + userToken))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        Integer id = JsonPath.read(meBody, "$.id");
+        Integer id = idDe(login(email, "secreto123"));
 
-        String adminToken = login("admin", "admin123");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASS);
         mockMvc.perform(patch("/users/" + id + "/activo")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -237,17 +273,41 @@ class AuthFlowTests {
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody(username, "secreto123")))
+                        .content(loginBody(email, "secreto123")))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void usuarioInexistenteDa404() throws Exception {
-        String adminToken = login("admin", "admin123");
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASS);
         mockMvc.perform(patch("/users/999999/activo")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"activo\": false}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void adminNoPuedeDesactivarseASiMismo() throws Exception {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASS);
+        Integer id = idDe(adminToken);
+
+        mockMvc.perform(patch("/users/" + id + "/activo")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\": false}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cambiarRolesConRolInexistenteDa400() throws Exception {
+        String adminToken = login(ADMIN_EMAIL, ADMIN_PASS);
+        Integer idDemo = idDe(login(DEMO_EMAIL, DEMO_PASS));
+
+        mockMvc.perform(put("/users/" + idDemo + "/roles")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"roles\": [\"SUPERMAN\"]}"))
+                .andExpect(status().isBadRequest());
     }
 }

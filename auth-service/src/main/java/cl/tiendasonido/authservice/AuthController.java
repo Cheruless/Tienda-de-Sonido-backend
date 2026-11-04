@@ -49,69 +49,81 @@ public class AuthController {
     // ---------- DTOs ----------
 
     public record LoginRequest(
-        @NotBlank(message = "El username es obligatorio") String username,
+        @NotBlank(message = "El correo es obligatorio") String email,
         @NotBlank(message = "La contraseña es obligatoria") String password) {}
 
-    public record LoginResponse(String token, String type, long expiresInSeconds) {}
+    public record UsuarioResumen(Long id, String nombre, String email, String rol) {}
+
+    public record LoginResponse(String token, String type, long expiresInSeconds, UsuarioResumen usuario) {}
 
     public record RegisterRequest(
-        @NotBlank(message = "El username es obligatorio")
-        @Size(min = 3, max = 50) String username,
+        @NotBlank(message = "El nombre es obligatorio")
+        @Size(min = 3, max = 100, message = "El nombre debe tener entre 3 y 100 caracteres") String nombre,
 
-        @NotBlank(message = "El email es obligatorio")
-        @Email(message = "Email inválido") String email,
+        @NotBlank(message = "El correo es obligatorio")
+        @Email(message = "Correo inválido")
+        @Size(max = 120, message = "El correo es demasiado largo") String email,
 
         @NotBlank(message = "La contraseña es obligatoria")
-        @Size(min = 6, max = 100) String password) {}
+        @Size(min = 6, max = 100, message = "La contraseña debe tener entre 6 y 100 caracteres") String password) {}
 
     // ---------- Endpoints ----------
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        String email = request.email().trim().toLowerCase();
         try {
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.username(), request.password()));
+                new UsernamePasswordAuthenticationToken(email, request.password()));
 
             String token = jwtUtil.generateToken(
                 authentication.getName(), authentication.getAuthorities());
 
-            return ResponseEntity.ok(new LoginResponse(token, "Bearer", 3600));
+            Usuario usuario = usuarioRepository.findByEmail(authentication.getName()).orElseThrow();
+            var resumen = new UsuarioResumen(
+                usuario.getId(), usuario.getNombre(), usuario.getEmail(), rolUnico(usuario));
+
+            return ResponseEntity.ok(new LoginResponse(token, "Bearer", 3600, resumen));
 
         } catch (AuthenticationException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("error", "Credenciales inválidas"));
+                .body(Map.of("error", "Correo o contraseña incorrectos."));
         }
     }
 
     @PostMapping("/register")
     public ResponseEntity<Map<String, String>> register(@Valid @RequestBody RegisterRequest request) {
-        if (usuarioRepository.existsByUsername(request.username())) {
+        String email = request.email().trim().toLowerCase();
+
+        if (usuarioRepository.existsByEmail(email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "El username ya está en uso"));
-        }
-        if (usuarioRepository.existsByEmail(request.email())) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "El email ya está registrado"));
+                .body(Map.of("error", "El correo electrónico ya está registrado."));
         }
 
         Rol rolCliente = rolRepository.findByNombre("CLIENTE")
             .orElseGet(() -> rolRepository.save(new Rol("CLIENTE")));
 
         Usuario usuario = new Usuario();
-        usuario.setUsername(request.username());
-        usuario.setEmail(request.email());
+        usuario.setNombre(request.nombre().trim());
+        usuario.setEmail(email);
         usuario.setPassword(passwordEncoder.encode(request.password()));
         usuario.setRoles(Set.of(rolCliente));
 
         try {
             usuarioRepository.save(usuario);
         } catch (DataIntegrityViolationException ex) {
-            // Cubre el caso de dos registros simultáneos con el mismo username o email
+            // Dos registros simultáneos con el mismo correo
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "El username o el email ya existen"));
+                .body(Map.of("error", "El correo electrónico ya está registrado."));
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(Map.of("message", "Usuario '" + request.username() + "' registrado exitosamente"));
+            .body(Map.of("message", "¡Usuario registrado exitosamente!"));
+    }
+
+    // El frontend maneja un solo rol por usuario: "admin" o "cliente"
+    private String rolUnico(Usuario usuario) {
+        return usuario.getRoles().stream().anyMatch(r -> r.getNombre().equals("ADMIN"))
+            ? "admin" : "cliente";
     }
 }
