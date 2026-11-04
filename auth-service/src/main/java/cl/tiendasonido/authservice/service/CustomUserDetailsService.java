@@ -17,13 +17,14 @@ public class CustomUserDetailsService implements UserDetailsService {
         this.usuarioRepository = usuarioRepository;
     }
 
+    // Spring llama "username" a lo que identifica al usuario; aquí es el email.
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        var usuario = usuarioRepository.findByUsername(username)
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        var usuario = usuarioRepository.findByEmail(email.trim().toLowerCase())
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
 
         return User.builder()
-                .username(usuario.getUsername())
+                .username(usuario.getEmail())
                 .password(usuario.getPassword())
                 .roles(usuario.getRoles().stream().map(Rol::getNombre).toArray(String[]::new))
                 .disabled(!usuario.isActivo())

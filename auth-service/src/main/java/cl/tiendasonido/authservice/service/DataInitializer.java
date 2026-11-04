@@ -32,14 +32,14 @@ public class DataInitializer implements CommandLineRunner {
         Rol cliente = rolRepository.findByNombre("CLIENTE")
                 .orElseGet(() -> rolRepository.save(new Rol("CLIENTE")));
 
-        crearSiNoExiste("admin", "admin@tiendasonido.cl", "admin123", admin);
-        crearSiNoExiste("cliente", "cliente@tiendasonido.cl", "cliente123", cliente);
+        crearSiNoExiste("Administrador", "admin@sonidovivo.cl", "Admin123Password", admin);
+        crearSiNoExiste("Usuario Demo", "demo@sonidovivo.cl", "Demo123Password", cliente);
     }
 
-    private void crearSiNoExiste(String username, String email, String rawPassword, Rol rol) {
-        if (usuarioRepository.existsByUsername(username)) return;
+    private void crearSiNoExiste(String nombre, String email, String rawPassword, Rol rol) {
+        if (usuarioRepository.existsByEmail(email)) return;
         Usuario u = new Usuario();
-        u.setUsername(username);
+        u.setNombre(nombre);
         u.setEmail(email);
         u.setPassword(passwordEncoder.encode(rawPassword));
         u.setRoles(Set.of(rol));
