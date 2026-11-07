@@ -1,3 +1,22 @@
+server:
+  port: 8083
+
 spring:
   application:
     name: cart-service
+  data:
+    mongodb:
+      uri: ${MONGO_URL:mongodb://localhost:27017/cartdb}
+      auto-index-creation: true
+
+# Mismo secreto que usa auth-service para firmar los JWT (HS256)
+jwt:
+  secret: ${JWT_SECRET:cambia-este-secreto-por-uno-de-minimo-32-caracteres-seguro}
+
+catalog:
+  # Implementacion del cliente: "fake" (desarrollo) o "http" (cuando exista catalog-service)
+  client: ${CATALOG_CLIENT:fake}
+  base-url: ${CATALOG_BASE_URL:http://localhost:8082}
+
+cors:
+  allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}

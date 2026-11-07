@@ -1,0 +1,6 @@
+spring:
+  data:
+    mongodb:
+      # En el contexto de tests no crearmos indices ni conectamos a una BD real:
+      # los tests de repositorio usan Testcontainers con su propia configuracion.
+      auto-index-creation: false
