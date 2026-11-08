@@ -21,35 +21,35 @@ public class JwtUtil {
     private final long expirationMs;
 
     public JwtUtil(@Value("${jwt.secret}") String secret,
-                   @Value("${jwt.expiration-ms:3600000}") long expirationMs) {
+            @Value("${jwt.expiration-ms:3600000}") long expirationMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }
 
     public String generateToken(String username, Collection<? extends GrantedAuthority> authorities) {
         List<String> roles = authorities.stream()
-        .map(GrantedAuthority::getAuthority)
-        .filter(a -> a.startsWith("ROLE_"))
-        .toList();
+                .map(GrantedAuthority::getAuthority)
+                .filter(a -> a.startsWith("ROLE_"))
+                .toList();
 
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
-            .subject(username)
-            .claim("roles", roles)
-            .issuedAt(now)
-            .expiration(expiry)
-            .signWith(key)
-            .compact();
+                .subject(username)
+                .claim("roles", roles)
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(key, Jwts.SIG.HS256)
+                .compact();
     }
 
     public Claims extractClaims(String token) {
         return Jwts.parser()
-            .verifyWith(key)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public String extractUsername(String token) {
