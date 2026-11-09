@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
@@ -35,10 +35,10 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
 
     public AuthController(AuthenticationManager authenticationManager,
-                          JwtUtil jwtUtil,
-                          UsuarioRepository usuarioRepository,
-                          RolRepository rolRepository,
-                          PasswordEncoder passwordEncoder) {
+            JwtUtil jwtUtil,
+            UsuarioRepository usuarioRepository,
+            RolRepository rolRepository,
+            PasswordEncoder passwordEncoder) {
         this.authenticationManager = authenticationManager;
         this.jwtUtil = jwtUtil;
         this.usuarioRepository = usuarioRepository;
@@ -49,23 +49,23 @@ public class AuthController {
     // ---------- DTOs ----------
 
     public record LoginRequest(
-        @NotBlank(message = "El correo es obligatorio") String email,
-        @NotBlank(message = "La contraseña es obligatoria") String password) {}
+            @NotBlank(message = "El correo es obligatorio") String email,
+            @NotBlank(message = "La contraseña es obligatoria") String password) {
+    }
 
-    public record UsuarioResumen(Long id, String nombre, String email, String rol) {}
+    public record UsuarioResumen(Long id, String nombre, String email, String rol) {
+    }
 
-    public record LoginResponse(String token, String type, long expiresInSeconds, UsuarioResumen usuario) {}
+    public record LoginResponse(String token, String type, long expiresInSeconds, UsuarioResumen usuario) {
+    }
 
     public record RegisterRequest(
-        @NotBlank(message = "El nombre es obligatorio")
-        @Size(min = 3, max = 100, message = "El nombre debe tener entre 3 y 100 caracteres") String nombre,
+            @NotBlank(message = "El nombre es obligatorio") @Size(min = 3, max = 100, message = "El nombre debe tener entre 3 y 100 caracteres") String nombre,
 
-        @NotBlank(message = "El correo es obligatorio")
-        @Email(message = "Correo inválido")
-        @Size(max = 120, message = "El correo es demasiado largo") String email,
+            @NotBlank(message = "El correo es obligatorio") @Email(message = "Correo inválido") @Size(max = 120, message = "El correo es demasiado largo") String email,
 
-        @NotBlank(message = "La contraseña es obligatoria")
-        @Size(min = 6, max = 100, message = "La contraseña debe tener entre 6 y 100 caracteres") String password) {}
+            @NotBlank(message = "La contraseña es obligatoria") @Size(min = 6, max = 100, message = "La contraseña debe tener entre 6 y 100 caracteres") String password) {
+    }
 
     // ---------- Endpoints ----------
 
@@ -74,20 +74,20 @@ public class AuthController {
         String email = request.email().trim().toLowerCase();
         try {
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(email, request.password()));
+                    new UsernamePasswordAuthenticationToken(email, request.password()));
 
             String token = jwtUtil.generateToken(
-                authentication.getName(), authentication.getAuthorities());
+                    authentication.getName(), authentication.getAuthorities());
 
             Usuario usuario = usuarioRepository.findByEmail(authentication.getName()).orElseThrow();
             var resumen = new UsuarioResumen(
-                usuario.getId(), usuario.getNombre(), usuario.getEmail(), rolUnico(usuario));
+                    usuario.getId(), usuario.getNombre(), usuario.getEmail(), rolUnico(usuario));
 
-            return ResponseEntity.ok(new LoginResponse(token, "Bearer", 3600, resumen));
+            return ResponseEntity.ok(new LoginResponse(token, "Bearer", jwtUtil.getExpirationSeconds(), resumen));
 
         } catch (AuthenticationException ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("error", "Correo o contraseña incorrectos."));
+                    .body(Map.of("error", "Correo o contraseña incorrectos."));
         }
     }
 
@@ -97,11 +97,11 @@ public class AuthController {
 
         if (usuarioRepository.existsByEmail(email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "El correo electrónico ya está registrado."));
+                    .body(Map.of("error", "El correo electrónico ya está registrado."));
         }
 
         Rol rolCliente = rolRepository.findByNombre("CLIENTE")
-            .orElseGet(() -> rolRepository.save(new Rol("CLIENTE")));
+                .orElseGet(() -> rolRepository.save(new Rol("CLIENTE")));
 
         Usuario usuario = new Usuario();
         usuario.setNombre(request.nombre().trim());
@@ -114,16 +114,17 @@ public class AuthController {
         } catch (DataIntegrityViolationException ex) {
             // Dos registros simultáneos con el mismo correo
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(Map.of("error", "El correo electrónico ya está registrado."));
+                    .body(Map.of("error", "El correo electrónico ya está registrado."));
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(Map.of("message", "¡Usuario registrado exitosamente!"));
+                .body(Map.of("message", "¡Usuario registrado exitosamente!"));
     }
 
     // El frontend maneja un solo rol por usuario: "admin" o "cliente"
     private String rolUnico(Usuario usuario) {
         return usuario.getRoles().stream().anyMatch(r -> r.getNombre().equals("ADMIN"))
-            ? "admin" : "cliente";
+                ? "admin"
+                : "cliente";
     }
 }
