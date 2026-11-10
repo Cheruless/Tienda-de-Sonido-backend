@@ -3,6 +3,7 @@ package cl.tiendasonido.cartservice.web.error;
 import cl.tiendasonido.cartservice.service.exception.CartItemNotFoundException;
 import cl.tiendasonido.cartservice.service.exception.CatalogUnavailableException;
 import cl.tiendasonido.cartservice.service.exception.ConflictException;
+import cl.tiendasonido.cartservice.service.exception.ProductInvalidException;
 import cl.tiendasonido.cartservice.service.exception.ProductNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -110,6 +111,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ProductNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleProductNotFound(ProductNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(ProductInvalidException.class)
+    public ResponseEntity<Map<String, String>> handleProductInvalid(ProductInvalidException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", ex.getMessage()));
     }
 
     /**
