@@ -1,0 +1,133 @@
+name: tienda-sonido
+
+services:
+  # ---------- Bases de datos ----------
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME:-auth_db}
+      POSTGRES_USER: ${AUTH_DB_USER:-auth_user}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+    volumes:
+      - auth_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user} -d ${AUTH_DB_NAME:-auth_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+
+  catalog-db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ${CATALOG_DB_NAME:-tienda_catalogo}
+      MYSQL_USER: ${CATALOG_DB_USER:-catalog_user}
+      MYSQL_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+    volumes:
+      - catalog_mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "3307:3306"
+    restart: unless-stopped
+
+  cart-db:
+    image: mongo:8
+    volumes:
+      - cart_mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "27018:27017"
+    restart: unless-stopped
+
+  # ---------- Microservicios ----------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    environment:
+      DB_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME:-auth_db}
+      DB_USER: ${AUTH_DB_USER:-auth_user}
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (copia .env.example)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  catalog-service:
+    build:
+      context: ./catalog-service
+      dockerfile: Dockerfile
+    environment:
+      DB_URL: "jdbc:mysql://catalog-db:3306/${CATALOG_DB_NAME:-tienda_catalogo}?createDatabaseIfNotExist=true&serverTimezone=America/Santiago"
+      DB_USER: ${CATALOG_DB_USER:-catalog_user}
+      DB_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog_pass}
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (copia .env.example)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+
+  cart-service:
+    build:
+      context: ./cart-service
+      dockerfile: Dockerfile
+    environment:
+      MONGO_URL: mongodb://cart-db:27017/cartdb
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (copia .env.example)}
+      CATALOG_CLIENT: http
+      CATALOG_BASE_URL: http://catalog-service:8082
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    depends_on:
+      cart-db:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8081
+      CATALOG_SERVICE_URL: http://catalog-service:8082
+      CART_SERVICE_URL: http://cart-service:8083
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+    depends_on:
+      auth-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      cart-service:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  auth_pgdata:
+    name: auth_pgdata
+  catalog_mysqldata:
+    name: catalog_mysqldata
+  cart_mongodata:
+    name: cart_mongodata
