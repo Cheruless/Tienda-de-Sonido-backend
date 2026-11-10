@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+jwt:
+  secret: cambia-este-secreto-por-uno-de-minimo-32-caracteres-seguro
+
+cors:
+  allowed-origins: http://localhost:5173
