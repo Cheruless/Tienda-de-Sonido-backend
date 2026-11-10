@@ -9,19 +9,25 @@ spring:
             - id: auth-service-auth
               uri: ${AUTH_SERVICE_URL:http://localhost:8081}
               predicates:
-                - Path=/auth/**
+                - Path=/api/auth/**
               filters:
                 - RemoveRequestHeader=Origin
             - id: auth-service-users
               uri: ${AUTH_SERVICE_URL:http://localhost:8081}
               predicates:
-                - Path=/users/**
+                - Path=/api/users/**
               filters:
                 - RemoveRequestHeader=Origin
-            - id: catalog-service
+            - id: catalog-productos
               uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
               predicates:
-                - Path=/api/v1/**
+                - Path=/api/productos/**
+              filters:
+                - RemoveRequestHeader=Origin
+            - id: catalog-categorias
+              uri: ${CATALOG_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/categorias/**
               filters:
                 - RemoveRequestHeader=Origin
             - id: cart-service

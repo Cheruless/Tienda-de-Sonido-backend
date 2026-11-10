@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/productos")
+@RequestMapping("/api/productos")
 @RequiredArgsConstructor
 @Tag(name = "Productos", description = "Consulta pública; crear, editar y eliminar requiere el rol ADMIN")
 public class ProductoController {
