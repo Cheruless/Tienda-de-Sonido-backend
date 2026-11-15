@@ -4,9 +4,13 @@ server:
 spring:
   application:
     name: cart-service
+  # En Spring Boot 4 la conexion a MongoDB vive en spring.mongodb.*
+  # (en Boot 3 era spring.data.mongodb.uri).
+  mongodb:
+    uri: ${MONGO_URL:mongodb://localhost:27017/cartdb}
+  # spring.data.mongodb.* sigue existiendo para las propiedades de datos.
   data:
     mongodb:
-      uri: ${MONGO_URL:mongodb://localhost:27017/cartdb}
       auto-index-creation: true
 
 # Mismo secreto que usa auth-service para firmar los JWT (HS256)

@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/categorias")
+@RequestMapping("/api/categorias")
 @RequiredArgsConstructor
 @Tag(name = "Categorías", description = "Consulta pública; crear, editar y eliminar requiere el rol ADMIN")
 public class CategoriaController {

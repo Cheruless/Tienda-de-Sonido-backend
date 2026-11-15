@@ -43,3 +43,6 @@ build/
 
 ### LongCat agent ###
 .longcat/
+
+### Entorno local (secretos) ###
+.env
