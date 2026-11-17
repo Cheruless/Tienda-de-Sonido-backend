@@ -1,5 +1,7 @@
 package cl.tiendasonido.cartservice.service;
 
+import java.util.List;
+
 /**
  * <strong>Puerto</strong> (interfaz) hacia catálogo: define <em>qué</em>
  * necesita el carrito de afuera, sin decidir <em>cómo</em> se obtiene.
@@ -30,4 +32,19 @@ public interface CatalogClient {
      * @throws cl.tiendasonido.cartservice.service.exception.CatalogUnavailableException si catálogo no responde
      */
     ProductSummary getProduct(String productId);
+
+    /**
+     * Registra una venta y descuenta el stock en catálogo.
+     *
+     * <p>Es <strong>todo o nada</strong>: o se descuenta el stock de todos los
+     * productos del lote, o no se descuenta ninguno (catálogo corre la venta
+     * en una sola transacción y la revierte si algo falla).</p>
+     *
+     * @param items productos vendidos con sus cantidades
+     * @throws cl.tiendasonido.cartservice.service.exception.ConflictException
+     *         si algún producto no alcanza el stock (409) — no se descontó nada
+     * @throws cl.tiendasonido.cartservice.service.exception.CatalogUnavailableException
+     *         si catálogo no responde (503)
+     */
+    void registrarVenta(List<ItemVenta> items);
 }
