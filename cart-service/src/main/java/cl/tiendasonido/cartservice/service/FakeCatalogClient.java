@@ -1,10 +1,12 @@
 package cl.tiendasonido.cartservice.service;
 
+import cl.tiendasonido.cartservice.service.exception.ConflictException;
 import cl.tiendasonido.cartservice.service.exception.ProductNotFoundException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-
-import java.util.Map;
 
 /**
  * <strong>Adaptador</strong> de {@link CatalogClient} que responde con datos
@@ -37,6 +39,12 @@ public class FakeCatalogClient implements CatalogClient {
             "demo-2", new ProductSummary("demo-2", "Bajo 4 cuerdas", 149_990L),
             "demo-3", new ProductSummary("demo-3", "Amplificador 50W", 89_990L));
 
+    /** Stock mutable del catálogo falso: el "descuento" de registrarVenta lo modifica. */
+    private final Map<String, Long> stockActual = new ConcurrentHashMap<>(Map.of(
+            "demo-1", 8L,
+            "demo-2", 5L,
+            "demo-3", 3L));
+
     /**
      * Busca el producto en el mapa en memoria.
      *
@@ -54,5 +62,33 @@ public class FakeCatalogClient implements CatalogClient {
             throw new ProductNotFoundException(productId);
         }
         return producto;
+    }
+
+    /**
+     * Simula el descuento de stock: valida el lote completo contra el mapa y,
+     * si todo alcanza, lo descuenta. Mismo contrato "todo o nada" que el
+     * backend real.
+     *
+     * @param items productos vendidos
+     * @throws ConflictException si algún producto no alcanza el stock
+     */
+    @Override
+    public void registrarVenta(List<ItemVenta> items) {
+        for (ItemVenta item : items) {
+            ProductSummary producto = productos.get(item.productId());
+            if (producto == null) {
+                throw new ProductNotFoundException(item.productId());
+            }
+            Long stock = stockActual.get(item.productId());
+            if (stock == null || stock < item.cantidad()) {
+                throw new ConflictException(
+                        "Stock insuficiente para \"" + producto.name() + "\": quedan "
+                                + (stock == null ? 0 : stock) + " unidades");
+            }
+        }
+        // Todo alcanza: recién ahora se descuenta (emulación de la transacción).
+        for (ItemVenta item : items) {
+            stockActual.merge(item.productId(), (long) -item.cantidad(), Long::sum);
+        }
     }
 }

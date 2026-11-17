@@ -26,6 +26,10 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/productos/**", "/api/categorias/**").permitAll()
+                        // Venta (descuento de stock): la llama cart-service en nombre
+                        // del cliente autenticado. NO requiere ADMIN: quien compra es un
+                        // cliente. En producción este endpoint sería solo de red interna.
+                        .requestMatchers(HttpMethod.POST, "/api/productos/venta").authenticated()
                         .requestMatchers("/api/productos/**", "/api/categorias/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(errores -> errores

@@ -84,6 +84,46 @@ public class CartService {
     }
 
     /**
+     * Compra el carrito: descuenta el stock en catálogo y vacía el carrito.
+     *
+     * <p><strong>Garantía de consistencia:</strong> la venta se envía a
+     * catálogo como UN lote y catálogo la descuenta en una sola transacción
+     * (todo o nada). Si algún producto no alcanza el stock, catálogo responde
+     * 409, NADA se descuenta y el carrito queda intacto. No hay descuentos
+     * parciales que deshacer.</p>
+     *
+     * <p>Orden de operaciones deliberado: primero se descuenta stock (el
+     * recurso escaso se reserva) y recién al confirmar se vacía el carrito.
+     * Si la descarga del carrito fallara, lo peor que puede pasar es que el
+     * usuario tenga que vaciarlo a mano: jamás se paga sin stock.</p>
+     *
+     * @param userId correo del comprador (claim {@code sub} del JWT)
+     * @throws cl.tiendasonido.cartservice.service.exception.CartItemNotFoundException
+     *         si el carrito está vacío (404)
+     * @throws cl.tiendasonido.cartservice.service.exception.ConflictException
+     *         si falta stock (409): el carrito queda como estaba
+     * @throws CatalogUnavailableException si catálogo no responde (503)
+     */
+    public void comprar(String userId) {
+        Cart cart = repository.findByUserId(userId)
+                .orElseThrow(() -> new CartItemNotFoundException("el carrito está vacío"));
+        if (cart.getItems().isEmpty()) {
+            throw new CartItemNotFoundException("el carrito está vacío");
+        }
+
+        List<ItemVenta> venta = cart.getItems().stream()
+                .map(i -> new ItemVenta(i.getProductId(), i.getQuantity()))
+                .toList();
+
+        // 1) Reservar el stock en catálogo (todo o nada). Si responde 409,
+        //    la excepción se propaga y el carrito NO se toca.
+        catalogClient.registrarVenta(venta);
+
+        // 2) Stock descontado: ahora sí se vacía el carrito.
+        repository.delete(cart);
+    }
+
+    /**
      * Agrega un producto al carrito, fusionando cantidades si ya existe.
      *
      * <p>Flujo: primero consulta catálogo (si el producto no existe, lanza

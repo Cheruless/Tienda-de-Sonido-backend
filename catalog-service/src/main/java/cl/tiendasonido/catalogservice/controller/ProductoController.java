@@ -2,6 +2,7 @@ package cl.tiendasonido.catalogservice.controller;
 
 import cl.tiendasonido.catalogservice.dto.ProductoRequest;
 import cl.tiendasonido.catalogservice.dto.ProductoResponse;
+import cl.tiendasonido.catalogservice.dto.VentaRequest;
 import cl.tiendasonido.catalogservice.service.ProductoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -72,5 +73,16 @@ public class ProductoController {
     @ApiResponse(responseCode = "404", description = "El producto no existe")
     public void eliminar(@PathVariable("id") Long id) {
         productoService.eliminar(id);
+    }
+
+    @PostMapping("/venta")
+    @SecurityRequirement(name = "bearerAuth")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Registra una venta y descuenta el stock (todo o nada)")
+    @ApiResponse(responseCode = "400", description = "Datos inválidos")
+    @ApiResponse(responseCode = "404", description = "Algún producto no existe")
+    @ApiResponse(responseCode = "409", description = "Stock insuficiente: no se descontó nada")
+    public void vender(@Valid @RequestBody VentaRequest venta) {
+        productoService.vender(venta);
     }
 }

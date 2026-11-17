@@ -102,4 +102,19 @@ public class CartController {
         cartService.removeItem(jwt.getSubject(), productId);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * {@code POST /api/cart/compra} — compra el carrito: descuenta el stock
+     * en catalog-service y vacía el carrito.
+     *
+     * @param jwt token ya validado; de ahí sale el comprador
+     * @return 204 si la compra se registró; 404 si el carrito está vacío;
+     *         409 si falta stock (el carrito queda intacto); 503 si catálogo
+     *         no responde; 401 sin token
+     */
+    @PostMapping("/compra")
+    public ResponseEntity<Void> comprar(@AuthenticationPrincipal Jwt jwt) {
+        cartService.comprar(jwt.getSubject());
+        return ResponseEntity.noContent().build();
+    }
 }

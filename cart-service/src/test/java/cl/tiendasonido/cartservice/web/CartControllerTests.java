@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -81,5 +82,19 @@ class CartControllerTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"productId\":\"\",\"quantity\":0}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void comprarConJwtDevuelve204() throws Exception {
+        mockMvc.perform(post("/api/cart/compra").with(jwt()))
+                .andExpect(status().isNoContent());
+
+        verify(cartService).comprar("user@example.com");
+    }
+
+    @Test
+    void comprarSinTokenDevuelve401() throws Exception {
+        mockMvc.perform(post("/api/cart/compra"))
+                .andExpect(status().isUnauthorized());
     }
 }

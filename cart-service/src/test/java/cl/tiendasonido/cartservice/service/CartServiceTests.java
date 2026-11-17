@@ -3,9 +3,11 @@ package cl.tiendasonido.cartservice.service;
 import cl.tiendasonido.cartservice.domain.Cart;
 import cl.tiendasonido.cartservice.repository.CartRepository;
 import cl.tiendasonido.cartservice.service.exception.CartItemNotFoundException;
+import cl.tiendasonido.cartservice.service.exception.CatalogUnavailableException;
 import cl.tiendasonido.cartservice.service.exception.ConflictException;
 import cl.tiendasonido.cartservice.web.dto.AddItemRequest;
 import cl.tiendasonido.cartservice.web.dto.CartResponse;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,6 +20,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -110,5 +114,63 @@ class CartServiceTests {
 
         assertThatThrownBy(() -> service.removeItem("user@example.com", "demo-1"))
                 .isInstanceOf(CartItemNotFoundException.class);
+    }
+
+    // ---------- Compra (descuento de stock en catálogo) ----------
+
+    @Test
+    void comprarDescuentaStockYVaciaElCarrito() {
+        Cart cart = new Cart("user@example.com");
+        cart.addOrMerge(new Cart.Item("32", "Pedal Distorsión", 79_990L, 2));
+        cart.addOrMerge(new Cart.Item("5", "Guitarra Acústica Folk", 129_990L, 1));
+        when(repository.findByUserId("user@example.com")).thenReturn(Optional.of(cart));
+
+        service.comprar("user@example.com");
+
+        // La venta se envía COMPLETA a catálogo (todo o nada).
+        verify(catalogClient).registrarVenta(List.of(
+                new ItemVenta("32", 2),
+                new ItemVenta("5", 1)));
+        verify(repository).delete(cart);
+    }
+
+    @Test
+    void comprarNoVaciaElCarritoSiFaltaStock() {
+        Cart cart = new Cart("user@example.com");
+        cart.addOrMerge(new Cart.Item("32", "Pedal Distorsión", 79_990L, 2));
+        when(repository.findByUserId("user@example.com")).thenReturn(Optional.of(cart));
+        doThrow(new ConflictException("Stock insuficiente para \"Pedal Distorsión\""))
+                .when(catalogClient).registrarVenta(any());
+
+        assertThatThrownBy(() -> service.comprar("user@example.com"))
+                .isInstanceOf(ConflictException.class);
+
+        // El carrito queda INTACTO: el usuario puede ajustar cantidades.
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void comprarConCarritoVacioLanzaError() {
+        when(repository.findByUserId("user@example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.comprar("user@example.com"))
+                .isInstanceOf(CartItemNotFoundException.class);
+
+        verify(catalogClient, never()).registrarVenta(any());
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void comprarNoVaciaElCarritoSiCatalogoNoResponde() {
+        Cart cart = new Cart("user@example.com");
+        cart.addOrMerge(new Cart.Item("32", "Pedal Distorsión", 79_990L, 1));
+        when(repository.findByUserId("user@example.com")).thenReturn(Optional.of(cart));
+        doThrow(new CatalogUnavailableException("sin catálogo", new RuntimeException()))
+                .when(catalogClient).registrarVenta(any());
+
+        assertThatThrownBy(() -> service.comprar("user@example.com"))
+                .isInstanceOf(CatalogUnavailableException.class);
+
+        verify(repository, never()).delete(any());
     }
 }
