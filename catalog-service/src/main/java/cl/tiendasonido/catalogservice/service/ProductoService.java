@@ -2,6 +2,8 @@ package cl.tiendasonido.catalogservice.service;
 
 import cl.tiendasonido.catalogservice.dto.ProductoRequest;
 import cl.tiendasonido.catalogservice.dto.ProductoResponse;
+import cl.tiendasonido.catalogservice.dto.VentaItem;
+import cl.tiendasonido.catalogservice.dto.VentaRequest;
 import cl.tiendasonido.catalogservice.entity.Categoria;
 import cl.tiendasonido.catalogservice.entity.Producto;
 import cl.tiendasonido.catalogservice.exception.ConflictoException;
@@ -63,6 +65,32 @@ public class ProductoService {
             throw new RecursoNoEncontradoException("Producto no encontrado con id " + id);
         }
         productoRepository.deleteById(id);
+    }
+
+    /**
+     * Registra una venta: descuenta el stock de todos los productos del lote.
+     *
+     * <p>Es <strong>todo o nada</strong>: el método corre en una sola
+     * transacción ({@code @Transactional}) y la excepción al no alcanzar el
+     * stock la revierte completa. La protección fina está en la consulta
+     * atómica {@link ProductoRepository#descontarStock}: aun con dos ventas
+     * simultáneas, solo una descontará la última unidad.</p>
+     *
+     * @param venta productos y cantidades vendidas
+     * @throws RecursoNoEncontradoException si algún producto no existe (404)
+     * @throws ConflictoException           si algún producto no alcanza el stock (409)
+     */
+    @Transactional
+    public void vender(VentaRequest venta) {
+        for (VentaItem item : venta.items()) {
+            Producto producto = buscar(item.id());
+            int descontados = productoRepository.descontarStock(item.id(), item.cantidad());
+            if (descontados == 0) {
+                throw new ConflictoException(
+                        "Stock insuficiente para \"" + producto.getNombre() + "\": quedan "
+                                + producto.getStock() + " unidades y se solicitaron " + item.cantidad());
+            }
+        }
     }
 
     private Producto buscar(Long id) {

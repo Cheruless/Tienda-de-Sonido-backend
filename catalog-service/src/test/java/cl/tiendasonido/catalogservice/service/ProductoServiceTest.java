@@ -9,6 +9,9 @@ import static org.mockito.Mockito.when;
 
 import cl.tiendasonido.catalogservice.dto.ProductoRequest;
 import cl.tiendasonido.catalogservice.dto.ProductoResponse;
+import cl.tiendasonido.catalogservice.dto.VentaItem;
+import cl.tiendasonido.catalogservice.dto.VentaRequest;
+import java.util.List;
 import cl.tiendasonido.catalogservice.entity.Categoria;
 import cl.tiendasonido.catalogservice.entity.Producto;
 import cl.tiendasonido.catalogservice.exception.ConflictoException;
@@ -83,5 +86,40 @@ class ProductoServiceTest {
         assertThrows(RecursoNoEncontradoException.class, () -> productoService.eliminar(5L));
 
         verify(productoRepository, never()).deleteById(any(Long.class));
+    }
+
+    // ---------- Venta (descuento de stock) ----------
+
+    @Test
+    void venderDescuentaElStockDeTodoElLote() {
+        Producto producto = new Producto();
+        producto.setStock(10);
+        when(productoRepository.findById(1L)).thenReturn(Optional.of(producto));
+        when(productoRepository.descontarStock(1L, 3)).thenReturn(1);
+
+        productoService.vender(new VentaRequest(List.of(new VentaItem(1L, 3))));
+
+        verify(productoRepository).descontarStock(1L, 3);
+    }
+
+    @Test
+    void venderRechazaTodoElLoteSiFaltaStock() {
+        Producto producto = new Producto();
+        producto.setNombre("Guitarra");
+        producto.setStock(2);
+        when(productoRepository.findById(1L)).thenReturn(Optional.of(producto));
+        // La consulta atómica afecta 0 filas: no alcanzaba el stock.
+        when(productoRepository.descontarStock(1L, 5)).thenReturn(0);
+
+        assertThrows(ConflictoException.class,
+                () -> productoService.vender(new VentaRequest(List.of(new VentaItem(1L, 5)))));
+    }
+
+    @Test
+    void venderFallaSiAlgunProductoNoExiste() {
+        when(productoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(RecursoNoEncontradoException.class,
+                () -> productoService.vender(new VentaRequest(List.of(new VentaItem(99L, 1)))));
     }
 }
